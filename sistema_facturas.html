@@ -7,11 +7,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module">
-// ══════════════════════════════════════════════
-//  FIREBASE CONFIG
-// ══════════════════════════════════════════════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDyGHKUWoBJlNkA6h6v_Q2MmtVoOQ7sWHk",
@@ -21,81 +18,64 @@ const firebaseConfig = {
   messagingSenderId: "969567848438",
   appId: "1:969567848438:web:9bd0b48610d5e969a969d7"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ── Cargar facturas desde Firebase al iniciar ──
 async function loadFromFirebase() {
   try {
-    showFirebaseStatus('⏳ Cargando datos...', 'loading');
-    const snap = await getDocs(collection(db, 'invoices'));
-    invoices = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
-    // Cargar apiKey guardada
-    try {
-      const cfgSnap = await getDocs(collection(db, 'config'));
-      cfgSnap.docs.forEach(d => {
-        if (d.id === 'apiKey' && d.data().value) {
-          apiKey = d.data().value;
-          updateKeyStatus();
-        }
-      });
-    } catch(e) {}
-    document.getElementById('load-notice').style.display = 'none';
-    renderGestor();
-    showFirebaseStatus('✅ Datos cargados', 'ok');
-    setTimeout(() => hideFirebaseStatus(), 2500);
-  } catch(e) {
-    showFirebaseStatus('⚠️ Error conectando a Firebase', 'error');
-    console.error(e);
-  }
+    showFB('⏳ Cargando datos...','loading');
+    const [invSnap, horasSnap, cfgSnap] = await Promise.all([
+      getDocs(collection(db,'invoices')),
+      getDocs(collection(db,'horas')),
+      getDocs(collection(db,'config'))
+    ]);
+    invoices = invSnap.docs.map(d=>({...d.data(), _docId:d.id}));
+    window._horasLog = horasSnap.docs.map(d=>({...d.data(), _docId:d.id}));
+    cfgSnap.docs.forEach(d=>{
+      if(d.id==='apiKey'&&d.data().value){apiKey=d.data().value;updateKeyStatus();}
+    });
+    renderGestor(); renderHoras();
+    showFB('✅ Datos cargados','ok');
+    setTimeout(hideFB, 2500);
+  } catch(e){ showFB('⚠️ Error conectando a Firebase','error'); console.error(e); }
 }
 
-// ── Guardar factura en Firebase ──
 window.saveInvoiceToFirebase = async function(inv) {
   try {
-    const data = { ...inv };
-    delete data._docId;
-    if (inv._docId) {
-      await setDoc(doc(db, 'invoices', inv._docId), data);
-    } else {
-      const ref = await addDoc(collection(db, 'invoices'), data);
-      inv._docId = ref.id;
-    }
-  } catch(e) { console.error('Error guardando en Firebase:', e); }
+    const data={...inv}; delete data._docId;
+    if(inv._docId){ await setDoc(doc(db,'invoices',inv._docId),data); }
+    else { const ref=await addDoc(collection(db,'invoices'),data); inv._docId=ref.id; }
+  } catch(e){console.error(e);}
 };
-
-// ── Eliminar factura de Firebase ──
 window.deleteInvoiceFromFirebase = async function(docId) {
-  if (!docId) return;
-  try { await deleteDoc(doc(db, 'invoices', docId)); } catch(e) { console.error(e); }
+  if(!docId)return;
+  try{ await deleteDoc(doc(db,'invoices',docId)); }catch(e){console.error(e);}
 };
-
-// ── Guardar apiKey en Firebase ──
+window.saveHoraToFirebase = async function(entry) {
+  try {
+    const data={...entry}; delete data._docId;
+    if(entry._docId){ await setDoc(doc(db,'horas',entry._docId),data); }
+    else { const ref=await addDoc(collection(db,'horas'),data); entry._docId=ref.id; }
+  } catch(e){console.error(e);}
+};
+window.deleteHoraFromFirebase = async function(docId) {
+  if(!docId)return;
+  try{ await deleteDoc(doc(db,'horas',docId)); }catch(e){console.error(e);}
+};
 window.saveApiKeyToFirebase = async function(key) {
-  try { await setDoc(doc(db, 'config', 'apiKey'), { value: key }); } catch(e) { console.error(e); }
+  try{ await setDoc(doc(db,'config','apiKey'),{value:key}); }catch(e){console.error(e);}
 };
 
-function showFirebaseStatus(msg, type) {
-  let el = document.getElementById('fb-status');
-  if (!el) return;
-  el.textContent = msg;
-  el.style.display = 'block';
-  el.className = 'fb-status ' + type;
-}
-function hideFirebaseStatus() {
-  const el = document.getElementById('fb-status');
-  if (el) el.style.display = 'none';
-}
+function showFB(msg,type){const el=document.getElementById('fb-status');if(!el)return;el.textContent=msg;el.style.display='block';el.className='fb-status '+type;}
+function hideFB(){const el=document.getElementById('fb-status');if(el)el.style.display='none';}
 
-// Iniciar carga cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', () => loadFromFirebase());
+document.addEventListener('DOMContentLoaded',()=>loadFromFirebase());
 </script>
 <style>
-.fb-status { display:none; font-size:12px; padding:6px 28px; }
-.fb-status.loading { background:#fff8e1; color:#7a5c00; }
-.fb-status.ok { background:#e8f5ee; color:#1a5f3f; }
-.fb-status.error { background:#fdecea; color:#c0392b; }
+.fb-status{display:none;font-size:12px;padding:6px 28px;}
+.fb-status.loading{background:#fff8e1;color:#7a5c00;}
+.fb-status.ok{background:#e8f5ee;color:#1a5f3f;}
+.fb-status.error{background:#fdecea;color:#c0392b;}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, sans-serif; background: #f4f6f4; color: #222; min-height: 100vh; }
 
@@ -295,7 +275,7 @@ tbody td:last-child { text-align: center; }
   <div class="topbar-right">
     <button class="key-btn" onclick="openKeyModal()">🔑 API Key</button>
     <button class="tb-btn outline" onclick="openUpload()">📂 Subir PDFs</button>
-    <button class="tb-btn" id="migrate-btn" onclick="migrateJSON()" style="background:#e8a020;color:white;border:none;" title="Usá esto una sola vez para migrar tu facturas.json a Firebase">⬆️ Migrar JSON</button>
+    <button class="tb-btn" id="migrate-btn" onclick="migrateJSON()" style="background:#e8a020;color:white;border:none;" title="Una sola vez: migrar JSON a Firebase">⬆️ Migrar JSON</button>
     <input type="file" id="migrate-file-input" accept=".json" style="display:none">
     <div id="fb-status" class="fb-status"></div>
   </div>
@@ -509,43 +489,16 @@ function showPage(name) {
 }
 
 // ══════════════════════════════════════════════
-//  PERSISTENCE — Firebase
+//  PERSISTENCE
 // ══════════════════════════════════════════════
-function markDirty() { dirty=true; }
+function markDirty() { dirty=true; document.getElementById('save-notice').style.display='flex'; }
 
 function exportJSON() {
   const blob = new Blob([JSON.stringify({invoices,apiKey},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='facturas.json'; a.click();
+  dirty=false; document.getElementById('save-notice').style.display='none';
 }
-function migrateJSON() { document.getElementById('migrate-file-input').click(); }
-document.getElementById('migrate-file-input').addEventListener('change', async function(){
-  const file=this.files[0]; if(!file)return;
-  const r=new FileReader();
-  r.onload=async e=>{
-    try {
-      const data=JSON.parse(e.target.result);
-      const list=Array.isArray(data)?data:(data.invoices||[]);
-      if(!list.length){alert('No se encontraron facturas en el archivo.');return;}
-      if(!confirm('Se van a migrar '+list.length+' facturas a Firebase. ¿Continuar?'))return;
-      const btn=document.getElementById('migrate-btn');
-      btn.textContent='⏳ Migrando...';btn.disabled=true;
-      let ok=0;
-      for(const inv of list){
-        try{
-          if(window.saveInvoiceToFirebase){await saveInvoiceToFirebase(inv);ok++;}
-        }catch(ex){console.error(ex);}
-      }
-      if(data.apiKey&&window.saveApiKeyToFirebase){apiKey=data.apiKey;updateKeyStatus();await saveApiKeyToFirebase(data.apiKey);}
-      invoices=list;renderGestor();
-      btn.textContent='✅ Migrado!';
-      setTimeout(()=>{btn.style.display='none';},3000);
-      alert('✅ '+ok+' facturas migradas a Firebase correctamente. Ya podés cerrar y abrir la app sin perder datos.');
-    } catch(err){alert('Error: '+err.message);}
-  };
-  r.readAsText(file); this.value='';
-});
-
-
+function importJSONPrompt() { document.getElementById('json-file-input').click(); }
 document.getElementById('json-file-input').addEventListener('change', function(){
   const file=this.files[0]; if(!file)return;
   const r=new FileReader();
@@ -554,6 +507,7 @@ document.getElementById('json-file-input').addEventListener('change', function()
       const data=JSON.parse(e.target.result);
       if(Array.isArray(data)){invoices=data;}
       else{invoices=data.invoices||[];if(data.apiKey){apiKey=data.apiKey;updateKeyStatus();}}
+      document.getElementById('load-notice').style.display='none';
       renderGestor();
     } catch(err){alert('Error al leer el archivo: '+err.message);}
   };
@@ -567,9 +521,7 @@ function getKey(){return apiKey||'';}
 function saveKey(){
   const val=document.getElementById('key-input').value.trim();
   if(!val.startsWith('sk-ant-')){alert('La key debe empezar con sk-ant-');return;}
-  apiKey=val; updateKeyStatus();
-  if(window.saveApiKeyToFirebase) saveApiKeyToFirebase(val);
-  closeKeyModal();
+  apiKey=val; updateKeyStatus(); markDirty(); closeKeyModal();
 }
 function updateKeyStatus(){
   const k=getKey(),el=document.getElementById('key-current');
@@ -795,8 +747,7 @@ function saveInvoice(){
   else{
     const qitem=pendingQueueId?uploadQueue.find(i=>String(i.id)===String(pendingQueueId)):null;
     const newInv={id:Date.now(),...rec,pdf:qitem&&qitem.pdfBase64?qitem.pdfBase64:''};
-    invoices.push(newInv);
-    if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(newInv);
+    invoices.push(newInv);if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(newInv);
   }
   if(pendingQueueId){
     const item=uploadQueue.find(i=>String(i.id)===String(pendingQueueId));
@@ -883,9 +834,8 @@ function saveAllReady(){
   uploadQueue.filter(i=>i.status==='ready').forEach(item=>{
     const p=item.parsed;
     const h=parseNum(p.hours),r=parseNum(p.rate||'30'),total=parseNum(p.total)||h*r;
-    const newInv={id:Date.now()+Math.random(),num:p.num||'',date:p.date||'',client:p.client||'',desc:p.desc||'',hours:p.hours||'',rate:p.rate||'30',total,status:'pending',pdf:item.pdfBase64||''};
-    invoices.push(newInv);
-    if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(newInv);
+    const newInv2={id:Date.now()+Math.random(),num:p.num||'',date:p.date||'',client:p.client||'',desc:p.desc||'',hours:p.hours||'',rate:p.rate||'30',total,status:'pending',pdf:item.pdfBase64||''};
+    invoices.push(newInv2);if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(newInv2);
     const s=document.getElementById('uqs-'+item.id);if(s){s.className='uq-status saved';s.textContent='✅ Guardada';}
     const b=document.getElementById('uqb-'+item.id);if(b)b.style.display='none';
     item.status='saved';
