@@ -494,6 +494,31 @@ function showPage(name) {
 // ══════════════════════════════════════════════
 function markDirty() { dirty=true; document.getElementById('save-notice').style.display='flex'; }
 
+
+function migrateJSON(){document.getElementById('migrate-file-input').click();}
+document.getElementById('migrate-file-input').addEventListener('change',async function(){
+  const file=this.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=async e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      const list=Array.isArray(data)?data:(data.invoices||[]);
+      const horasList=data.horasLog||[];
+      if(!list.length&&!horasList.length){alert('No se encontraron datos.');return;}
+      if(!confirm('Migrar '+list.length+' facturas y '+horasList.length+' registros de horas a Firebase. Continuar?'))return;
+      const btn=document.getElementById('migrate-btn');
+      btn.textContent='Migrando...';btn.disabled=true;
+      for(const inv of list){if(window.saveInvoiceToFirebase)await window.saveInvoiceToFirebase(inv);}
+      for(const h of horasList){if(window.saveHoraToFirebase)await window.saveHoraToFirebase(h);}
+      if(data.apiKey&&window.saveApiKeyToFirebase){apiKey=data.apiKey;updateKeyStatus();await window.saveApiKeyToFirebase(data.apiKey);}
+      invoices=list;setHorasLog(horasList);renderGestor();renderHoras();
+      btn.textContent='Migrado!';
+      setTimeout(function(){btn.style.display='none';},3000);
+      alert('Migracion completa: '+list.length+' facturas guardadas.');
+    }catch(err){alert('Error: '+err.message);}
+  };
+  r.readAsText(file);this.value='';
+});
 function exportJSON() {
   const blob = new Blob([JSON.stringify({invoices,apiKey},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='facturas.json'; a.click();
