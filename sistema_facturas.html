@@ -399,6 +399,44 @@ tbody td:last-child { text-align: center; }
     </div>
   </div>
 </div>
+
+<!-- HORAS PAGE -->
+<div class="page" id="page-horas">
+  <div class="horas-wrap">
+    <div class="horas-form-col">
+      <div class="horas-section">
+        <h3>+ Registrar horas</h3>
+        <div class="h-field"><label>Cliente</label><input type="text" id="h-client" placeholder="Pintumat LLC" list="h-client-list"><datalist id="h-client-list"></datalist></div>
+        <div class="h-field"><label>Fecha</label><input type="date" id="h-date"></div>
+        <div class="h-field"><label>Horas (ej: 1.5)</label><input type="text" inputmode="decimal" id="h-hours" placeholder="0"></div>
+        <div class="h-field"><label>Nota (opcional)</label><textarea id="h-note" placeholder="ej: reconciliacion enero, cierre de mes..."></textarea></div>
+        <button class="h-add-btn" onclick="addHorasEntry()">+ Agregar horas</button>
+      </div>
+    </div>
+    <div class="horas-summary-col">
+      <div class="horas-filters">
+        <label>Mostrar:</label>
+        <select id="h-filter" onchange="renderHoras()">
+          <option value="all">Todos</option>
+          <option value="pending">Pendientes de facturar</option>
+          <option value="invoiced">Facturadas</option>
+        </select>
+        <label style="margin-left:8px">Ordenar:</label>
+        <select id="h-sort" onchange="renderHoras()">
+          <option value="date-desc">Fecha abajo</option>
+          <option value="date-asc">Fecha arriba</option>
+          <option value="hours-desc">Horas abajo</option>
+          <option value="hours-asc">Horas arriba</option>
+          <option value="client-asc">Cliente A-Z</option>
+        </select>
+      </div>
+      <div id="horas-summary">
+        <div class="empty-horas">No hay horas registradas aun. Usa el formulario para empezar a cargar.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="invoice-clone-wrap"></div>
 
 <!-- MODAL: Edit/New invoice -->
