@@ -23,7 +23,6 @@ const db = getFirestore(app);
 
 async function loadFromFirebase() {
   try {
-    showFB('⏳ Cargando datos...','loading');
     const [invSnap, horasSnap, cfgSnap] = await Promise.all([
       getDocs(collection(db,'invoices')),
       getDocs(collection(db,'horas')),
@@ -36,8 +35,8 @@ async function loadFromFirebase() {
     });
     renderGestor(); renderHoras();
     showFB('✅ Datos cargados','ok');
-    setTimeout(hideFB, 2500);
-  } catch(e){ showFB('⚠️ Error conectando a Firebase','error'); console.error(e); }
+    setTimeout(hideFB, 2000);
+  } catch(e){ console.error('Firebase error:',e); }
 }
 
 window.saveInvoiceToFirebase = async function(inv) {
@@ -258,6 +257,56 @@ tbody td:last-child { text-align: center; }
 .bulk-btn.primary:hover { background: #154e33; }
 .bulk-btn.primary:disabled { background: #888; cursor: wait; }
 .bulk-btn.secondary { background: white; color: #555; border: 0.5px solid #ccc; }
+
+/* HORAS */
+.horas-wrap{padding:20px 28px;max-width:1100px;display:grid;grid-template-columns:380px 1fr;gap:24px;}
+.horas-form-col{display:flex;flex-direction:column;gap:14px;}
+.horas-section{background:white;border:0.5px solid #dde8e2;border-radius:14px;padding:18px;}
+.horas-section h3{font-size:13px;font-weight:600;color:#1a5f3f;margin-bottom:14px;}
+.h-field{margin-bottom:10px;}
+.h-field:last-child{margin-bottom:0;}
+.h-field label{display:block;font-size:11px;color:#777;margin-bottom:3px;}
+.h-field input,.h-field select,.h-field textarea{width:100%;font-size:13px;padding:7px 10px;border:0.5px solid #ccc;border-radius:8px;background:white;color:#222;font-family:Arial,sans-serif;}
+.h-field textarea{resize:vertical;min-height:44px;}
+.h-add-btn{width:100%;padding:9px;background:#1a5f3f;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Arial,sans-serif;}
+.h-add-btn:hover{background:#154e33;}
+.horas-summary-col{display:flex;flex-direction:column;gap:16px;}
+.horas-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px;}
+.horas-filters label{font-size:11px;color:#777;}
+.horas-filters select{font-size:12px;padding:5px 10px;border:0.5px solid #ccc;border-radius:8px;background:white;color:#222;font-family:Arial,sans-serif;}
+.client-card{background:white;border:0.5px solid #dde8e2;border-radius:14px;overflow:hidden;margin-bottom:12px;}
+.client-card-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#f7fbf8;border-bottom:0.5px solid #dde8e2;cursor:pointer;}
+.client-card-header:hover{background:#e8f5ee;}
+.cc-name{font-size:14px;font-weight:600;color:#1a5f3f;}
+.cc-meta{font-size:12px;color:#888;margin-top:2px;}
+.cc-right{display:flex;align-items:center;gap:10px;}
+.cc-hours{font-size:22px;font-weight:700;color:#1a5f3f;}
+.cc-hours span{font-size:12px;font-weight:normal;color:#888;}
+.cc-actions{display:flex;gap:6px;}
+.cc-btn{padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:Arial,sans-serif;border:none;white-space:nowrap;}
+.cc-btn.primary{background:#1a5f3f;color:white;}
+.cc-btn.primary:hover{background:#154e33;}
+.cc-btn.danger{background:white;color:#c0392b;border:0.5px solid #f5c0bc;}
+.cc-btn.danger:hover{background:#fdecea;}
+.client-entries{display:none;}
+.client-entries.open{display:block;}
+.entry-row{display:flex;align-items:center;gap:8px;padding:8px 18px;border-bottom:0.5px solid #f0f4f1;font-size:13px;}
+.entry-row:last-child{border-bottom:none;}
+.entry-row.invoiced{background:#f7fbf8;opacity:0.75;}
+.entry-date{color:#888;font-size:12px;width:90px;flex-shrink:0;}
+.entry-hours{font-weight:600;color:#1a5f3f;width:55px;flex-shrink:0;}
+.entry-note{color:#555;flex:1;font-size:12px;}
+.entry-status{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;white-space:nowrap;cursor:pointer;user-select:none;flex-shrink:0;}
+.entry-status.pending{background:#fef3ec;color:#c0622a;}
+.entry-status.invoiced{background:#e8f5ee;color:#1a5f3f;}
+.entry-actions{display:flex;gap:4px;flex-shrink:0;}
+.entry-edit{background:none;border:0.5px solid #ccc;border-radius:5px;cursor:pointer;font-size:11px;padding:2px 6px;color:#555;font-family:Arial,sans-serif;}
+.entry-edit:hover{background:#f0f0f0;}
+.entry-del{background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:0 2px;}
+.entry-del:hover{color:#c0392b;}
+.cc-pending-badge{font-size:11px;background:#fef3ec;color:#c0622a;border-radius:10px;padding:2px 8px;font-weight:600;}
+.empty-horas{text-align:center;color:#aaa;padding:50px 20px;font-size:13px;background:white;border-radius:14px;border:0.5px solid #dde8e2;}
+
 </style>
 </head>
 <body>
