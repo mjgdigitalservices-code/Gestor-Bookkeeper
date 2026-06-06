@@ -11,12 +11,12 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDyGHKUWoBJlNkA6h6v_Q2MmtVoOQ7sWHk",
-  authDomain: "gestor-bookkeeper.firebaseapp.com",
-  projectId: "gestor-bookkeeper",
-  storageBucket: "gestor-bookkeeper.firebasestorage.app",
-  messagingSenderId: "969567848438",
-  appId: "1:969567848438:web:9bd0b48610d5e969a969d7"
+  apiKey: "AIzaSyDnqZDw9kTDi5qRagKgQJBb5cEb22HxJgM",
+  authDomain: "gestor-bookkeeper-d39a6.firebaseapp.com",
+  projectId: "gestor-bookkeeper-d39a6",
+  storageBucket: "gestor-bookkeeper-d39a6.firebasestorage.app",
+  messagingSenderId: "326022582022",
+  appId: "1:326022582022:web:20951afcc1717966451887"
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -271,6 +271,7 @@ tbody td:last-child { text-align: center; }
     </div>
     <button class="tab active" id="tab-gestor" onclick="showPage('gestor')">📋 Gestor</button>
     <button class="tab" id="tab-facturador" onclick="showPage('facturador')">✏️ Nueva Factura</button>
+    <button class="tab" id="tab-horas" onclick="showPage('horas')">⏱ Horas</button>
   </div>
   <div class="topbar-right">
     <button class="key-btn" onclick="openKeyModal()">🔑 API Key</button>
