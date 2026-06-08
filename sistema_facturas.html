@@ -11,6 +11,25 @@ import { initializeApp }
 
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function getHorasLog(){return window._horasLog||[];}
+function setHorasLog(arr){window._horasLog=arr;}
+
+
+function addHorasEntry(){
+  const client=document.getElementById('h-client').value.trim();
+  const date=document.getElementById('h-date').value;
+  const hours=document.getElementById('h-hours').value.trim();
+  const note=document.getElementById('h-note').value.trim();
+  if(!client){alert('Ingresa el nombre del cliente');return;}
+  if(!date){alert('Ingresa la fecha');return;}
+  if(!hours||parseNum(hours)<=0){alert('Ingresa las horas');return;}
+  const log=getHorasLog();
+  const entry={id:Date.now(),client,date,hours,note,billed:false};
+  log.push(entry);setHorasLog(log);
+  if(window.saveHoraToFirebase)saveHoraToFirebase(entry);
+  document.getElementById('h-hours').value='';
+  document.getElementById('h-note').value='';
+  renderHoras();
+}
 
 function deleteHorasEntry(id){
   const log=getHorasLog();
