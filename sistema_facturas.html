@@ -7,7 +7,128 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeApp }
+
+function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function getHorasLog(){return window._horasLog||[];}
+
+function deleteHorasEntry(id){
+  const log=getHorasLog();
+  const entry=log.find(e=>e.id===id);
+  if(entry&&window.deleteHoraFromFirebase)deleteHoraFromFirebase(entry._docId);
+  setHorasLog(log.filter(e=>e.id!==id));renderHoras();
+}
+function toggleBilled(id){
+  const log=getHorasLog();
+  const entry=log.find(e=>e.id===id);
+  if(entry){entry.billed=!entry.billed;if(window.saveHoraToFirebase)saveHoraToFirebase(entry);}
+  setHorasLog(log);renderHoras();
+}
+function editHorasEntry(id){
+  const log=getHorasLog();
+  const entry=log.find(e=>e.id===id);if(!entry)return;
+  document.getElementById('h-client').value=entry.client;
+  document.getElementById('h-date').value=entry.date;
+  document.getElementById('h-hours').value=entry.hours;
+  document.getElementById('h-note').value=entry.note||'';
+  if(entry._docId&&window.deleteHoraFromFirebase)deleteHoraFromFirebase(entry._docId);
+  setHorasLog(log.filter(e=>e.id!==id));
+  renderHoras();
+  document.getElementById('h-client').focus();
+}
+function clearClientHoras(client){
+  if(!confirm('Eliminar todas las horas de "'+client+'"?'))return;
+  const log=getHorasLog();
+  log.filter(e=>e.client===client).forEach(e=>{if(e._docId&&window.deleteHoraFromFirebase)deleteHoraFromFirebase(e._docId);});
+  setHorasLog(log.filter(e=>e.client!==client));renderHoras();
+}
+function toggleClientEntries(client,key){
+  if(!key)key=btoa(unescape(encodeURIComponent(client))).replace(/[^a-zA-Z0-9]/g,'');
+  const el=document.getElementById('entries-'+key);
+  if(el)el.classList.toggle('open');
+}
+function sendToFacturador(client){
+  const allLog=getHorasLog();
+  const pending=allLog.filter(e=>e.client===client&&!e.billed);
+  if(!pending.length){alert('No hay horas pendientes de facturar para este cliente.');return;}
+  const totalHours=pending.reduce((a,e)=>a+parseNum(e.hours),0);
+  const dates=pending.map(e=>e.date).sort();
+  const fromDate=dates[0],toDate=dates[dates.length-1];
+  const[fy,fm]=fromDate.split('-').map(Number);
+  const[ty,tm]=toDate.split('-').map(Number);
+  allLog.forEach(e=>{if(e.client===client&&!e.billed){e.billed=true;if(window.saveHoraToFirebase)saveHoraToFirebase(e);}});
+  setHorasLog(allLog);
+  facRows=[{fromM:fm-1,fromY:fy,toM:tm-1,toY:ty,client:client,hours:String(totalHours%1===0?totalHours:totalHours.toFixed(1)),rate:'30'}];
+  renderFacRows();updateInvoiceTable();
+  renderHoras();showPage('facturador');
+}
+function renderHoras(){
+  const log=getHorasLog();
+  const summary=document.getElementById('horas-summary');
+  if(!summary)return;
+  const clients=[...new Set(invoices.map(i=>i.client).concat(log.map(e=>e.client)).filter(Boolean))].sort();
+  const dl=document.getElementById('h-client-list');
+  if(dl)dl.innerHTML=clients.map(c=>'<option value="'+c+'">').join('');
+  const filterVal=document.getElementById('h-filter')?document.getElementById('h-filter').value:'all';
+  const sortVal=document.getElementById('h-sort')?document.getElementById('h-sort').value:'date-desc';
+  if(!log.length){summary.innerHTML='<div class="empty-horas">No hay horas registradas aun. Usa el formulario para empezar a cargar.</div>';return;}
+  let filtered=log.filter(e=>{
+    if(filterVal==='pending')return!e.billed;
+    if(filterVal==='invoiced')return e.billed;
+    return true;
+  });
+  if(!filtered.length){summary.innerHTML='<div class="empty-horas">No hay entradas para el filtro seleccionado.</div>';return;}
+  filtered=[...filtered].sort((a,b)=>{
+    if(sortVal==='date-desc')return b.date.localeCompare(a.date);
+    if(sortVal==='date-asc')return a.date.localeCompare(b.date);
+    if(sortVal==='hours-desc')return parseNum(b.hours)-parseNum(a.hours);
+    if(sortVal==='hours-asc')return parseNum(a.hours)-parseNum(b.hours);
+    if(sortVal==='client-asc')return a.client.localeCompare(b.client);
+    return 0;
+  });
+  const clientOrder=[],byClient={};
+  filtered.forEach(e=>{if(!byClient[e.client]){byClient[e.client]=[];clientOrder.push(e.client);}byClient[e.client].push(e);});
+  summary.innerHTML='';
+  clientOrder.forEach(client=>{
+    const entries=byClient[client];
+    const pendingHours=log.filter(e=>e.client===client&&!e.billed).reduce((a,e)=>a+parseNum(e.hours),0);
+    const pendingCount=log.filter(e=>e.client===client&&!e.billed).length;
+    const dates=entries.map(e=>e.date).sort();
+    const fromDisp=isoToDisplay(dates[0]),toDisp=isoToDisplay(dates[dates.length-1]);
+    const key=btoa(unescape(encodeURIComponent(client))).replace(/[^a-zA-Z0-9]/g,'');
+    const card=document.createElement('div');card.className='client-card';
+    const safeClient=client.replace(/\/g,'\\').replace(/'/g,"\'");
+    card.innerHTML=`
+      <div class="client-card-header" onclick="toggleClientEntries('${safeClient}','${key}')">
+        <div>
+          <div class="cc-name">${client} ${pendingCount>0?'<span class="cc-pending-badge">'+pendingCount+' pendiente'+(pendingCount!==1?'s':'')+'</span>':''}</div>
+          <div class="cc-meta">${entries.length} entrada${entries.length!==1?'s':''} · ${fromDisp}${fromDisp!==toDisp?' → '+toDisp:''}</div>
+        </div>
+        <div class="cc-right">
+          <div class="cc-hours">${pendingHours%1===0?pendingHours:pendingHours.toFixed(1)}<span>hs pend.</span></div>
+          <div class="cc-actions">
+            <button class="cc-btn primary" onclick="event.stopPropagation();sendToFacturador('${safeClient}')">Generar factura</button>
+            <button class="cc-btn danger" onclick="event.stopPropagation();clearClientHoras('${safeClient}')">Limpiar</button>
+          </div>
+        </div>
+      </div>
+      <div class="client-entries" id="entries-${key}">
+        ${entries.map(e=>`
+          <div class="entry-row ${e.billed?'invoiced':''}">
+            <span class="entry-date">${isoToDisplay(e.date)}</span>
+            <span class="entry-hours">${parseNum(e.hours)%1===0?parseNum(e.hours):parseNum(e.hours).toFixed(1)}hs</span>
+            <span class="entry-note">${e.note||'<span style="color:#ccc">sin nota</span>'}</span>
+            <span class="entry-status ${e.billed?'invoiced':'pending'}" onclick="toggleBilled(${e.id})">${e.billed?'Facturada':'Pendiente'}</span>
+            <div class="entry-actions">
+              <button class="entry-edit" onclick="editHorasEntry(${e.id})">Editar</button>
+              <button class="entry-del" onclick="deleteHorasEntry(${e.id})">x</button>
+            </div>
+          </div>`).join('')}
+      </div>`;
+    summary.appendChild(card);
+  });
+}
+ from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -579,7 +700,7 @@ function showPage(name) {
 // ══════════════════════════════════════════════
 //  PERSISTENCE
 // ══════════════════════════════════════════════
-function markDirty() { dirty=true; document.getElementById('save-notice').style.display='flex'; }
+function markDirty() { dirty=true; }
 
 
 function migrateJSON(){document.getElementById('migrate-file-input').click();}
@@ -1036,6 +1157,8 @@ document.getElementById('upload-bg').addEventListener('click',function(e){if(e.t
 // Init
 renderFacRows();
 renderGestor();
+if(document.getElementById("h-date"))document.getElementById("h-date").value=todayISO();
+renderHoras();
 </script>
 </body>
 </html>
