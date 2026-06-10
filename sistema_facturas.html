@@ -780,14 +780,14 @@ function calcModalTotal(){
 }
 document.getElementById('m-hours').addEventListener('input',calcModalTotal);
 document.getElementById('m-rate').addEventListener('input',calcModalTotal);
-async function saveInvoice(){
+function saveInvoice(){
   const num=document.getElementById('m-num').value.trim(),date=document.getElementById('m-date').value;
   if(!num){alert('Ingresá el número de factura');return;}
   if(!date){alert('Ingresá la fecha');return;}
   const hours=document.getElementById('m-hours').value,rate=document.getElementById('m-rate').value;
   const total=parseNum(hours)*parseNum(rate)||parseNum(document.getElementById('m-total').value.replace('$',''));
   const rec={num,date,client:document.getElementById('m-client').value.trim(),desc:document.getElementById('m-desc').value.trim(),hours,rate,total,status:document.getElementById('m-status').value};
-  if(editingId){const inv=invoices.find(i=>i.id===editingId);if(inv){Object.assign(inv,rec);if(window.saveInvoiceToFirebase)await saveInvoiceToFirebase(inv);}}
+  if(editingId){const inv=invoices.find(i=>i.id===editingId);if(inv){Object.assign(inv,rec);if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(inv);}}
   else{
     const qitem=pendingQueueId?uploadQueue.find(i=>String(i.id)===String(pendingQueueId)):null;
     const newInv={id:Date.now(),...rec,pdf:qitem&&qitem.pdfBase64?qitem.pdfBase64:''};
@@ -881,7 +881,7 @@ async function saveAllReady(){
     const h=parseNum(p.hours),r=parseNum(p.rate||'30'),total=parseNum(p.total)||h*r;
     const ni={id:Date.now()+Math.random(),num:p.num||'',date:p.date||'',client:p.client||'',desc:p.desc||'',hours:p.hours||'',rate:p.rate||'30',total,status:'pending',pdf:item.pdfBase64||''};
     invoices.push(ni);
-    if(window.saveInvoiceToFirebase) await saveInvoiceToFirebase(ni);
+    if(window.saveInvoiceToFirebase) saveInvoiceToFirebase(ni);
     const s=document.getElementById('uqs-'+item.id);if(s){s.className='uq-status saved';s.textContent='✅ Guardada';}
     const b=document.getElementById('uqb-'+item.id);if(b)b.style.display='none';
     item.status='saved';
@@ -1001,7 +1001,7 @@ document.getElementById('migrate-file-input').addEventListener('change',async fu
   r.readAsText(file);this.value='';
 });
 
-async function addHorasEntry(){
+function addHorasEntry(){
   const client=document.getElementById('h-client').value.trim();
   const date=document.getElementById('h-date').value;
   const hours=document.getElementById('h-hours').value.trim();
@@ -1012,7 +1012,7 @@ async function addHorasEntry(){
   const log=getHorasLog();
   const entry={id:Date.now(),client,date,hours,note,billed:false};
   log.push(entry);setHorasLog(log);
-  if(window.saveHoraToFirebase)await saveHoraToFirebase(entry);
+  if(window.saveHoraToFirebase)saveHoraToFirebase(entry);
   document.getElementById('h-hours').value='';
   document.getElementById('h-note').value='';
   renderHoras();
@@ -1026,7 +1026,7 @@ function deleteHorasEntry(id){
 function toggleBilled(id){
   const log=getHorasLog();
   const entry=log.find(e=>e.id===id);
-  if(entry){entry.billed=!entry.billed;if(window.saveHoraToFirebase)await saveHoraToFirebase(entry);}
+  if(entry){entry.billed=!entry.billed;if(window.saveHoraToFirebase)saveHoraToFirebase(entry);}
   setHorasLog(log);renderHoras();
 }
 function editHorasEntry(id){
