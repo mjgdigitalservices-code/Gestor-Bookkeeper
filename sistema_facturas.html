@@ -7,149 +7,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module">
-import { initializeApp }
-
-function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-function getHorasLog(){return window._horasLog||[];}
-function setHorasLog(arr){window._horasLog=arr;}
-
-
-function addHorasEntry(){
-  const client=document.getElementById('h-client').value.trim();
-  const date=document.getElementById('h-date').value;
-  const hours=document.getElementById('h-hours').value.trim();
-  const note=document.getElementById('h-note').value.trim();
-  if(!client){alert('Ingresa el nombre del cliente');return;}
-  if(!date){alert('Ingresa la fecha');return;}
-  if(!hours||parseNum(hours)<=0){alert('Ingresa las horas');return;}
-  const log=getHorasLog();
-  const entry={id:Date.now(),client,date,hours,note,billed:false};
-  log.push(entry);setHorasLog(log);
-  if(window.saveHoraToFirebase)saveHoraToFirebase(entry);
-  document.getElementById('h-hours').value='';
-  document.getElementById('h-note').value='';
-  renderHoras();
-}
-
-function deleteHorasEntry(id){
-  const log=getHorasLog();
-  const entry=log.find(e=>e.id===id);
-  if(entry&&window.deleteHoraFromFirebase)deleteHoraFromFirebase(entry._docId);
-  setHorasLog(log.filter(e=>e.id!==id));renderHoras();
-}
-function toggleBilled(id){
-  const log=getHorasLog();
-  const entry=log.find(e=>e.id===id);
-  if(entry){entry.billed=!entry.billed;if(window.saveHoraToFirebase)saveHoraToFirebase(entry);}
-  setHorasLog(log);renderHoras();
-}
-function editHorasEntry(id){
-  const log=getHorasLog();
-  const entry=log.find(e=>e.id===id);if(!entry)return;
-  document.getElementById('h-client').value=entry.client;
-  document.getElementById('h-date').value=entry.date;
-  document.getElementById('h-hours').value=entry.hours;
-  document.getElementById('h-note').value=entry.note||'';
-  if(entry._docId&&window.deleteHoraFromFirebase)deleteHoraFromFirebase(entry._docId);
-  setHorasLog(log.filter(e=>e.id!==id));
-  renderHoras();
-  document.getElementById('h-client').focus();
-}
-function clearClientHoras(client){
-  if(!confirm('Eliminar todas las horas de "'+client+'"?'))return;
-  const log=getHorasLog();
-  log.filter(e=>e.client===client).forEach(e=>{if(e._docId&&window.deleteHoraFromFirebase)deleteHoraFromFirebase(e._docId);});
-  setHorasLog(log.filter(e=>e.client!==client));renderHoras();
-}
-function toggleClientEntries(client,key){
-  if(!key)key=btoa(unescape(encodeURIComponent(client))).replace(/[^a-zA-Z0-9]/g,'');
-  const el=document.getElementById('entries-'+key);
-  if(el)el.classList.toggle('open');
-}
-function sendToFacturador(client){
-  const allLog=getHorasLog();
-  const pending=allLog.filter(e=>e.client===client&&!e.billed);
-  if(!pending.length){alert('No hay horas pendientes de facturar para este cliente.');return;}
-  const totalHours=pending.reduce((a,e)=>a+parseNum(e.hours),0);
-  const dates=pending.map(e=>e.date).sort();
-  const fromDate=dates[0],toDate=dates[dates.length-1];
-  const[fy,fm]=fromDate.split('-').map(Number);
-  const[ty,tm]=toDate.split('-').map(Number);
-  allLog.forEach(e=>{if(e.client===client&&!e.billed){e.billed=true;if(window.saveHoraToFirebase)saveHoraToFirebase(e);}});
-  setHorasLog(allLog);
-  facRows=[{fromM:fm-1,fromY:fy,toM:tm-1,toY:ty,client:client,hours:String(totalHours%1===0?totalHours:totalHours.toFixed(1)),rate:'30'}];
-  renderFacRows();updateInvoiceTable();
-  renderHoras();showPage('facturador');
-}
-function renderHoras(){
-  const log=getHorasLog();
-  const summary=document.getElementById('horas-summary');
-  if(!summary)return;
-  const clients=[...new Set(invoices.map(i=>i.client).concat(log.map(e=>e.client)).filter(Boolean))].sort();
-  const dl=document.getElementById('h-client-list');
-  if(dl)dl.innerHTML=clients.map(c=>'<option value="'+c+'">').join('');
-  const filterVal=document.getElementById('h-filter')?document.getElementById('h-filter').value:'all';
-  const sortVal=document.getElementById('h-sort')?document.getElementById('h-sort').value:'date-desc';
-  if(!log.length){summary.innerHTML='<div class="empty-horas">No hay horas registradas aun. Usa el formulario para empezar a cargar.</div>';return;}
-  let filtered=log.filter(e=>{
-    if(filterVal==='pending')return!e.billed;
-    if(filterVal==='invoiced')return e.billed;
-    return true;
-  });
-  if(!filtered.length){summary.innerHTML='<div class="empty-horas">No hay entradas para el filtro seleccionado.</div>';return;}
-  filtered=[...filtered].sort((a,b)=>{
-    if(sortVal==='date-desc')return b.date.localeCompare(a.date);
-    if(sortVal==='date-asc')return a.date.localeCompare(b.date);
-    if(sortVal==='hours-desc')return parseNum(b.hours)-parseNum(a.hours);
-    if(sortVal==='hours-asc')return parseNum(a.hours)-parseNum(b.hours);
-    if(sortVal==='client-asc')return a.client.localeCompare(b.client);
-    return 0;
-  });
-  const clientOrder=[],byClient={};
-  filtered.forEach(e=>{if(!byClient[e.client]){byClient[e.client]=[];clientOrder.push(e.client);}byClient[e.client].push(e);});
-  summary.innerHTML='';
-  clientOrder.forEach(client=>{
-    const entries=byClient[client];
-    const pendingHours=log.filter(e=>e.client===client&&!e.billed).reduce((a,e)=>a+parseNum(e.hours),0);
-    const pendingCount=log.filter(e=>e.client===client&&!e.billed).length;
-    const dates=entries.map(e=>e.date).sort();
-    const fromDisp=isoToDisplay(dates[0]),toDisp=isoToDisplay(dates[dates.length-1]);
-    const key=btoa(unescape(encodeURIComponent(client))).replace(/[^a-zA-Z0-9]/g,'');
-    const card=document.createElement('div');card.className='client-card';
-    const safeClient=client.replace(/\/g,'\\').replace(/'/g,"\'");
-    card.innerHTML=`
-      <div class="client-card-header" onclick="toggleClientEntries('${safeClient}','${key}')">
-        <div>
-          <div class="cc-name">${client} ${pendingCount>0?'<span class="cc-pending-badge">'+pendingCount+' pendiente'+(pendingCount!==1?'s':'')+'</span>':''}</div>
-          <div class="cc-meta">${entries.length} entrada${entries.length!==1?'s':''} · ${fromDisp}${fromDisp!==toDisp?' → '+toDisp:''}</div>
-        </div>
-        <div class="cc-right">
-          <div class="cc-hours">${pendingHours%1===0?pendingHours:pendingHours.toFixed(1)}<span>hs pend.</span></div>
-          <div class="cc-actions">
-            <button class="cc-btn primary" onclick="event.stopPropagation();sendToFacturador('${safeClient}')">Generar factura</button>
-            <button class="cc-btn danger" onclick="event.stopPropagation();clearClientHoras('${safeClient}')">Limpiar</button>
-          </div>
-        </div>
-      </div>
-      <div class="client-entries" id="entries-${key}">
-        ${entries.map(e=>`
-          <div class="entry-row ${e.billed?'invoiced':''}">
-            <span class="entry-date">${isoToDisplay(e.date)}</span>
-            <span class="entry-hours">${parseNum(e.hours)%1===0?parseNum(e.hours):parseNum(e.hours).toFixed(1)}hs</span>
-            <span class="entry-note">${e.note||'<span style="color:#ccc">sin nota</span>'}</span>
-            <span class="entry-status ${e.billed?'invoiced':'pending'}" onclick="toggleBilled(${e.id})">${e.billed?'Facturada':'Pendiente'}</span>
-            <div class="entry-actions">
-              <button class="entry-edit" onclick="editHorasEntry(${e.id})">Editar</button>
-              <button class="entry-del" onclick="deleteHorasEntry(${e.id})">x</button>
-            </div>
-          </div>`).join('')}
-      </div>`;
-    summary.appendChild(card);
-  });
-}
- from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
 const firebaseConfig = {
   apiKey: "AIzaSyDnqZDw9kTDi5qRagKgQJBb5cEb22HxJgM",
   authDomain: "gestor-bookkeeper-d39a6.firebaseapp.com",
@@ -168,53 +27,23 @@ async function loadFromFirebase() {
       getDocs(collection(db,'horas')),
       getDocs(collection(db,'config'))
     ]);
-    invoices = invSnap.docs.map(d=>({...d.data(), _docId:d.id}));
-    window._horasLog = horasSnap.docs.map(d=>({...d.data(), _docId:d.id}));
-    cfgSnap.docs.forEach(d=>{
-      if(d.id==='apiKey'&&d.data().value){apiKey=d.data().value;updateKeyStatus();}
-    });
-    renderGestor(); renderHoras();
-    showFB('✅ Datos cargados','ok');
-    setTimeout(hideFB, 2000);
-  } catch(e){ console.error('Firebase error:',e); }
+    invoices = invSnap.docs.map(d=>({...d.data(),_docId:d.id}));
+    window._horasLog = horasSnap.docs.map(d=>({...d.data(),_docId:d.id}));
+    cfgSnap.docs.forEach(d=>{if(d.id==='apiKey'&&d.data().value){apiKey=d.data().value;updateKeyStatus();}});
+    renderGestor();renderHoras();
+    const fb=document.getElementById('fb-status');
+    if(fb){fb.textContent='Datos cargados';fb.style.display='block';fb.style.background='#e8f5ee';fb.style.color='#1a5f3f';setTimeout(()=>{fb.style.display='none';},2000);}
+  } catch(e){console.error('Firebase error:',e);}
 }
-
-window.saveInvoiceToFirebase = async function(inv) {
-  try {
-    const data={...inv}; delete data._docId;
-    if(inv._docId){ await setDoc(doc(db,'invoices',inv._docId),data); }
-    else { const ref=await addDoc(collection(db,'invoices'),data); inv._docId=ref.id; }
-  } catch(e){console.error(e);}
-};
-window.deleteInvoiceFromFirebase = async function(docId) {
-  if(!docId)return;
-  try{ await deleteDoc(doc(db,'invoices',docId)); }catch(e){console.error(e);}
-};
-window.saveHoraToFirebase = async function(entry) {
-  try {
-    const data={...entry}; delete data._docId;
-    if(entry._docId){ await setDoc(doc(db,'horas',entry._docId),data); }
-    else { const ref=await addDoc(collection(db,'horas'),data); entry._docId=ref.id; }
-  } catch(e){console.error(e);}
-};
-window.deleteHoraFromFirebase = async function(docId) {
-  if(!docId)return;
-  try{ await deleteDoc(doc(db,'horas',docId)); }catch(e){console.error(e);}
-};
-window.saveApiKeyToFirebase = async function(key) {
-  try{ await setDoc(doc(db,'config','apiKey'),{value:key}); }catch(e){console.error(e);}
-};
-
-function showFB(msg,type){const el=document.getElementById('fb-status');if(!el)return;el.textContent=msg;el.style.display='block';el.className='fb-status '+type;}
-function hideFB(){const el=document.getElementById('fb-status');if(el)el.style.display='none';}
-
+window.saveInvoiceToFirebase=async function(inv){try{const data={...inv};delete data._docId;if(inv._docId){await setDoc(doc(db,'invoices',inv._docId),data);}else{const ref=await addDoc(collection(db,'invoices'),data);inv._docId=ref.id;}}catch(e){console.error(e);}};
+window.deleteInvoiceFromFirebase=async function(docId){if(!docId)return;try{await deleteDoc(doc(db,'invoices',docId));}catch(e){console.error(e);}};
+window.saveHoraToFirebase=async function(entry){try{const data={...entry};delete data._docId;if(entry._docId){await setDoc(doc(db,'horas',entry._docId),data);}else{const ref=await addDoc(collection(db,'horas'),data);entry._docId=ref.id;}}catch(e){console.error(e);}};
+window.deleteHoraFromFirebase=async function(docId){if(!docId)return;try{await deleteDoc(doc(db,'horas',docId));}catch(e){console.error(e);}};
+window.saveApiKeyToFirebase=async function(key){try{await setDoc(doc(db,'config','apiKey'),{value:key});}catch(e){console.error(e);}};
 document.addEventListener('DOMContentLoaded',()=>loadFromFirebase());
 </script>
 <style>
-.fb-status{display:none;font-size:12px;padding:6px 28px;}
-.fb-status.loading{background:#fff8e1;color:#7a5c00;}
-.fb-status.ok{background:#e8f5ee;color:#1a5f3f;}
-.fb-status.error{background:#fdecea;color:#c0392b;}
+#fb-status{display:none;font-size:12px;padding:5px 14px;border-radius:6px;}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, sans-serif; background: #f4f6f4; color: #222; min-height: 100vh; }
 
@@ -398,13 +227,11 @@ tbody td:last-child { text-align: center; }
 .bulk-btn.primary:disabled { background: #888; cursor: wait; }
 .bulk-btn.secondary { background: white; color: #555; border: 0.5px solid #ccc; }
 
-/* HORAS */
 .horas-wrap{padding:20px 28px;max-width:1100px;display:grid;grid-template-columns:380px 1fr;gap:24px;}
 .horas-form-col{display:flex;flex-direction:column;gap:14px;}
 .horas-section{background:white;border:0.5px solid #dde8e2;border-radius:14px;padding:18px;}
 .horas-section h3{font-size:13px;font-weight:600;color:#1a5f3f;margin-bottom:14px;}
-.h-field{margin-bottom:10px;}
-.h-field:last-child{margin-bottom:0;}
+.h-field{margin-bottom:10px;}.h-field:last-child{margin-bottom:0;}
 .h-field label{display:block;font-size:11px;color:#777;margin-bottom:3px;}
 .h-field input,.h-field select,.h-field textarea{width:100%;font-size:13px;padding:7px 10px;border:0.5px solid #ccc;border-radius:8px;background:white;color:#222;font-family:Arial,sans-serif;}
 .h-field textarea{resize:vertical;min-height:44px;}
@@ -424,29 +251,22 @@ tbody td:last-child { text-align: center; }
 .cc-hours span{font-size:12px;font-weight:normal;color:#888;}
 .cc-actions{display:flex;gap:6px;}
 .cc-btn{padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:Arial,sans-serif;border:none;white-space:nowrap;}
-.cc-btn.primary{background:#1a5f3f;color:white;}
-.cc-btn.primary:hover{background:#154e33;}
-.cc-btn.danger{background:white;color:#c0392b;border:0.5px solid #f5c0bc;}
-.cc-btn.danger:hover{background:#fdecea;}
-.client-entries{display:none;}
-.client-entries.open{display:block;}
+.cc-btn.primary{background:#1a5f3f;color:white;}.cc-btn.primary:hover{background:#154e33;}
+.cc-btn.danger{background:white;color:#c0392b;border:0.5px solid #f5c0bc;}.cc-btn.danger:hover{background:#fdecea;}
+.client-entries{display:none;}.client-entries.open{display:block;}
 .entry-row{display:flex;align-items:center;gap:8px;padding:8px 18px;border-bottom:0.5px solid #f0f4f1;font-size:13px;}
-.entry-row:last-child{border-bottom:none;}
-.entry-row.invoiced{background:#f7fbf8;opacity:0.75;}
+.entry-row:last-child{border-bottom:none;}.entry-row.invoiced{background:#f7fbf8;opacity:0.75;}
 .entry-date{color:#888;font-size:12px;width:90px;flex-shrink:0;}
 .entry-hours{font-weight:600;color:#1a5f3f;width:55px;flex-shrink:0;}
 .entry-note{color:#555;flex:1;font-size:12px;}
 .entry-status{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;white-space:nowrap;cursor:pointer;user-select:none;flex-shrink:0;}
-.entry-status.pending{background:#fef3ec;color:#c0622a;}
-.entry-status.invoiced{background:#e8f5ee;color:#1a5f3f;}
+.entry-status.pending{background:#fef3ec;color:#c0622a;}.entry-status.invoiced{background:#e8f5ee;color:#1a5f3f;}
 .entry-actions{display:flex;gap:4px;flex-shrink:0;}
 .entry-edit{background:none;border:0.5px solid #ccc;border-radius:5px;cursor:pointer;font-size:11px;padding:2px 6px;color:#555;font-family:Arial,sans-serif;}
 .entry-edit:hover{background:#f0f0f0;}
-.entry-del{background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:0 2px;}
-.entry-del:hover{color:#c0392b;}
+.entry-del{background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:0 2px;}.entry-del:hover{color:#c0392b;}
 .cc-pending-badge{font-size:11px;background:#fef3ec;color:#c0622a;border-radius:10px;padding:2px 8px;font-weight:600;}
 .empty-horas{text-align:center;color:#aaa;padding:50px 20px;font-size:13px;background:white;border-radius:14px;border:0.5px solid #dde8e2;}
-
 </style>
 </head>
 <body>
@@ -465,20 +285,16 @@ tbody td:last-child { text-align: center; }
   <div class="topbar-right">
     <button class="key-btn" onclick="openKeyModal()">🔑 API Key</button>
     <button class="tb-btn outline" onclick="openUpload()">📂 Subir PDFs</button>
-    <button class="tb-btn" id="migrate-btn" onclick="migrateJSON()" style="background:#e8a020;color:white;border:none;" title="Una sola vez: migrar JSON a Firebase">⬆️ Migrar JSON</button>
+    <button class="tb-btn" id="migrate-btn" onclick="document.getElementById('migrate-file-input').click()" style="background:#e8a020;color:white;border:none;">⬆️ Migrar JSON</button>
     <input type="file" id="migrate-file-input" accept=".json" style="display:none">
-    <div id="fb-status" class="fb-status"></div>
+    <span id="fb-status" style="font-size:12px;padding:5px 10px;display:none;border-radius:6px;"></span>
   </div>
 </div>
 
 <!-- ══ GESTOR PAGE ══ -->
 <div class="page active" id="page-gestor">
-  <div class="notice notice-info" id="load-notice" style="display:none">
-    <span>⏳ Conectando con Firebase...</span>
-  </div>
-  <div class="notice" id="save-notice" style="display:none">
-    <span>⚠️ <b>Cambios sin guardar.</b></span>
-  </div>
+  <div id="load-notice" style="display:none"></div>
+  <div id="save-notice" style="display:none"></div>
   <input type="file" id="json-file-input" accept=".json" style="display:none">
 
   <div class="summary">
@@ -589,16 +405,15 @@ tbody td:last-child { text-align: center; }
   </div>
 </div>
 
-<!-- HORAS PAGE -->
 <div class="page" id="page-horas">
   <div class="horas-wrap">
     <div class="horas-form-col">
       <div class="horas-section">
-        <h3>+ Registrar horas</h3>
+        <h3>➕ Registrar horas</h3>
         <div class="h-field"><label>Cliente</label><input type="text" id="h-client" placeholder="Pintumat LLC" list="h-client-list"><datalist id="h-client-list"></datalist></div>
         <div class="h-field"><label>Fecha</label><input type="date" id="h-date"></div>
         <div class="h-field"><label>Horas (ej: 1.5)</label><input type="text" inputmode="decimal" id="h-hours" placeholder="0"></div>
-        <div class="h-field"><label>Nota (opcional)</label><textarea id="h-note" placeholder="ej: reconciliacion enero, cierre de mes..."></textarea></div>
+        <div class="h-field"><label>Nota (opcional)</label><textarea id="h-note" placeholder="ej: reconciliación enero, cierre de mes..."></textarea></div>
         <button class="h-add-btn" onclick="addHorasEntry()">+ Agregar horas</button>
       </div>
     </div>
@@ -612,15 +427,15 @@ tbody td:last-child { text-align: center; }
         </select>
         <label style="margin-left:8px">Ordenar:</label>
         <select id="h-sort" onchange="renderHoras()">
-          <option value="date-desc">Fecha abajo</option>
-          <option value="date-asc">Fecha arriba</option>
-          <option value="hours-desc">Horas abajo</option>
-          <option value="hours-asc">Horas arriba</option>
+          <option value="date-desc">Fecha ↓</option>
+          <option value="date-asc">Fecha ↑</option>
+          <option value="hours-desc">Horas ↓</option>
+          <option value="hours-asc">Horas ↑</option>
           <option value="client-asc">Cliente A-Z</option>
         </select>
       </div>
       <div id="horas-summary">
-        <div class="empty-horas">No hay horas registradas aun. Usa el formulario para empezar a cargar.</div>
+        <div class="empty-horas">📋 No hay horas registradas aún. Usá el formulario para empezar a cargar.</div>
       </div>
     </div>
   </div>
@@ -714,6 +529,7 @@ function showPage(name) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.getElementById('tab-'+name).classList.add('active');
+  if(name==='horas'&&document.getElementById('h-date'))document.getElementById('h-date').value=todayISO();
 }
 
 // ══════════════════════════════════════════════
@@ -721,31 +537,6 @@ function showPage(name) {
 // ══════════════════════════════════════════════
 function markDirty() { dirty=true; }
 
-
-function migrateJSON(){document.getElementById('migrate-file-input').click();}
-document.getElementById('migrate-file-input').addEventListener('change',async function(){
-  const file=this.files[0];if(!file)return;
-  const r=new FileReader();
-  r.onload=async e=>{
-    try{
-      const data=JSON.parse(e.target.result);
-      const list=Array.isArray(data)?data:(data.invoices||[]);
-      const horasList=data.horasLog||[];
-      if(!list.length&&!horasList.length){alert('No se encontraron datos.');return;}
-      if(!confirm('Migrar '+list.length+' facturas y '+horasList.length+' registros de horas a Firebase. Continuar?'))return;
-      const btn=document.getElementById('migrate-btn');
-      btn.textContent='Migrando...';btn.disabled=true;
-      for(const inv of list){if(window.saveInvoiceToFirebase)await window.saveInvoiceToFirebase(inv);}
-      for(const h of horasList){if(window.saveHoraToFirebase)await window.saveHoraToFirebase(h);}
-      if(data.apiKey&&window.saveApiKeyToFirebase){apiKey=data.apiKey;updateKeyStatus();await window.saveApiKeyToFirebase(data.apiKey);}
-      invoices=list;setHorasLog(horasList);renderGestor();renderHoras();
-      btn.textContent='Migrado!';
-      setTimeout(function(){btn.style.display='none';},3000);
-      alert('Migracion completa: '+list.length+' facturas guardadas.');
-    }catch(err){alert('Error: '+err.message);}
-  };
-  r.readAsText(file);this.value='';
-});
 function exportJSON() {
   const blob = new Blob([JSON.stringify({invoices,apiKey},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='facturas.json'; a.click();
@@ -774,7 +565,7 @@ function getKey(){return apiKey||'';}
 function saveKey(){
   const val=document.getElementById('key-input').value.trim();
   if(!val.startsWith('sk-ant-')){alert('La key debe empezar con sk-ant-');return;}
-  apiKey=val; updateKeyStatus(); markDirty(); closeKeyModal();
+  apiKey=val; updateKeyStatus(); if(window.saveApiKeyToFirebase)saveApiKeyToFirebase(val); closeKeyModal();
 }
 function updateKeyStatus(){
   const k=getKey(),el=document.getElementById('key-current');
@@ -873,8 +664,8 @@ function viewPDF(id){
   win.document.close();
 }
 
-function toggleStatus(id){const inv=invoices.find(i=>i.id===id);if(!inv)return;inv.status=inv.status==='paid'?'pending':'paid';if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(inv);markDirty();renderGestor();}
-function deleteInvoice(id){if(!confirm('¿Eliminar esta factura?'))return;const inv=invoices.find(i=>i.id===id);if(inv&&window.deleteInvoiceFromFirebase)deleteInvoiceFromFirebase(inv._docId);invoices=invoices.filter(i=>i.id!==id);markDirty();renderGestor();}
+function toggleStatus(id){const inv=invoices.find(i=>i.id===id);if(!inv)return;inv.status=inv.status==='paid'?'pending':'paid';if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(inv);renderGestor();}
+function deleteInvoice(id){if(!confirm('¿Eliminar esta factura?'))return;const inv=invoices.find(i=>i.id===id);if(inv&&window.deleteInvoiceFromFirebase)deleteInvoiceFromFirebase(inv._docId);invoices=invoices.filter(i=>i.id!==id);renderGestor();}
 function editInvoice(id){const inv=invoices.find(i=>i.id===id);if(inv)openModal(inv);}
 function resetFilters(){document.getElementById('fil-client').value='';document.getElementById('fil-status').value='';document.getElementById('fil-from').value='';document.getElementById('fil-to').value='';activeMonth=null;renderGestor();}
 
@@ -1087,8 +878,8 @@ function saveAllReady(){
   uploadQueue.filter(i=>i.status==='ready').forEach(item=>{
     const p=item.parsed;
     const h=parseNum(p.hours),r=parseNum(p.rate||'30'),total=parseNum(p.total)||h*r;
-    const newInv2={id:Date.now()+Math.random(),num:p.num||'',date:p.date||'',client:p.client||'',desc:p.desc||'',hours:p.hours||'',rate:p.rate||'30',total,status:'pending',pdf:item.pdfBase64||''};
-    invoices.push(newInv2);if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(newInv2);
+    const ni={id:Date.now()+Math.random(),num:p.num||'',date:p.date||'',client:p.client||'',desc:p.desc||'',hours:p.hours||'',rate:p.rate||'30',total,status:'pending',pdf:item.pdfBase64||''};
+    invoices.push(ni);if(window.saveInvoiceToFirebase)saveInvoiceToFirebase(ni);
     const s=document.getElementById('uqs-'+item.id);if(s){s.className='uq-status saved';s.textContent='✅ Guardada';}
     const b=document.getElementById('uqb-'+item.id);if(b)b.style.display='none';
     item.status='saved';
@@ -1176,7 +967,190 @@ document.getElementById('upload-bg').addEventListener('click',function(e){if(e.t
 // Init
 renderFacRows();
 renderGestor();
-if(document.getElementById("h-date"))document.getElementById("h-date").value=todayISO();
+
+// ══ HORAS FUNCTIONS ══
+if(!window._horasLog)window._horasLog=[];
+function getHorasLog(){return window._horasLog||[];}
+function setHorasLog(arr){window._horasLog=arr;}
+function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+function migrateJSON(){document.getElementById('migrate-file-input').click();}
+document.getElementById('migrate-file-input').addEventListener('change',async function(){
+  const file=this.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=async e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      const list=Array.isArray(data)?data:(data.invoices||[]);
+      const horasList=data.horasLog||[];
+      if(!list.length&&!horasList.length){alert('No se encontraron datos.');return;}
+      if(!confirm('Migrar '+list.length+' facturas y '+horasList.length+' registros de horas a Firebase. Continuar?'))return;
+      const btn=document.getElementById('migrate-btn');
+      btn.textContent='Migrando...';btn.disabled=true;
+      for(const inv of list){if(window.saveInvoiceToFirebase)await window.saveInvoiceToFirebase(inv);}
+      for(const h of horasList){if(window.saveHoraToFirebase)await window.saveHoraToFirebase(h);}
+      if(data.apiKey&&window.saveApiKeyToFirebase){apiKey=data.apiKey;updateKeyStatus();await window.saveApiKeyToFirebase(data.apiKey);}
+      invoices=list;setHorasLog(horasList);renderGestor();renderHoras();
+      btn.textContent='Migrado!';
+      setTimeout(function(){btn.style.display='none';},3000);
+      alert('Migracion completa: '+list.length+' facturas guardadas.');
+    }catch(err){alert('Error: '+err.message);}
+  };
+  r.readAsText(file);this.value='';
+});
+
+function addHorasEntry(){
+  const client=document.getElementById('h-client').value.trim();
+  const date=document.getElementById('h-date').value;
+  const hours=document.getElementById('h-hours').value.trim();
+  const note=document.getElementById('h-note').value.trim();
+  if(!client){alert('Ingresa el nombre del cliente');return;}
+  if(!date){alert('Ingresa la fecha');return;}
+  if(!hours||parseNum(hours)<=0){alert('Ingresa las horas');return;}
+  const log=getHorasLog();
+  const entry={id:Date.now(),client,date,hours,note,billed:false};
+  log.push(entry);setHorasLog(log);
+  if(window.saveHoraToFirebase)saveHoraToFirebase(entry);
+  document.getElementById('h-hours').value='';
+  document.getElementById('h-note').value='';
+  renderHoras();
+}
+function deleteHorasEntry(id){
+  const log=getHorasLog();
+  const entry=log.find(e=>e.id===id);
+  if(entry&&window.deleteHoraFromFirebase)deleteHoraFromFirebase(entry._docId);
+  setHorasLog(log.filter(e=>e.id!==id));renderHoras();
+}
+function toggleBilled(id){
+  const log=getHorasLog();
+  const entry=log.find(e=>e.id===id);
+  if(entry){entry.billed=!entry.billed;if(window.saveHoraToFirebase)saveHoraToFirebase(entry);}
+  setHorasLog(log);renderHoras();
+}
+function editHorasEntry(id){
+  const log=getHorasLog();
+  const entry=log.find(e=>e.id===id);if(!entry)return;
+  document.getElementById('h-client').value=entry.client;
+  document.getElementById('h-date').value=entry.date;
+  document.getElementById('h-hours').value=entry.hours;
+  document.getElementById('h-note').value=entry.note||'';
+  if(entry._docId&&window.deleteHoraFromFirebase)deleteHoraFromFirebase(entry._docId);
+  setHorasLog(log.filter(e=>e.id!==id));renderHoras();
+  document.getElementById('h-client').focus();
+}
+
+
+
+function renderHoras(){
+  var log=getHorasLog();
+  var summary=document.getElementById('horas-summary');
+  if(!summary)return;
+  var clients=[].concat(invoices.map(function(i){return i.client;}),log.map(function(e){return e.client;})).filter(Boolean);
+  clients=[...new Set(clients)].sort();
+  var dl=document.getElementById('h-client-list');
+  if(dl)dl.innerHTML=clients.map(function(c){return '<option value="'+c+'">';}).join('');
+  var filterEl=document.getElementById('h-filter');
+  var sortEl=document.getElementById('h-sort');
+  var filterVal=filterEl?filterEl.value:'all';
+  var sortVal=sortEl?sortEl.value:'date-desc';
+  if(!log.length){summary.innerHTML='<div class="empty-horas">No hay horas registradas. Usa el formulario para cargar.</div>';return;}
+  var filtered=log.filter(function(e){
+    if(filterVal==='pending')return!e.billed;
+    if(filterVal==='invoiced')return e.billed;
+    return true;
+  });
+  if(!filtered.length){summary.innerHTML='<div class="empty-horas">No hay entradas para el filtro seleccionado.</div>';return;}
+  filtered=filtered.slice().sort(function(a,b){
+    if(sortVal==='date-desc')return b.date.localeCompare(a.date);
+    if(sortVal==='date-asc')return a.date.localeCompare(b.date);
+    if(sortVal==='hours-desc')return parseNum(b.hours)-parseNum(a.hours);
+    if(sortVal==='hours-asc')return parseNum(a.hours)-parseNum(b.hours);
+    if(sortVal==='client-asc')return a.client.localeCompare(b.client);
+    return 0;
+  });
+  var clientOrder=[],byClient={};
+  filtered.forEach(function(e){if(!byClient[e.client]){byClient[e.client]=[];clientOrder.push(e.client);}byClient[e.client].push(e);});
+  summary.innerHTML='';
+  clientOrder.forEach(function(clientName){
+    var entries=byClient[clientName];
+    var pendingHours=log.filter(function(e){return e.client===clientName&&!e.billed;}).reduce(function(a,e){return a+parseNum(e.hours);},0);
+    var pendingCount=log.filter(function(e){return e.client===clientName&&!e.billed;}).length;
+    var dates=entries.map(function(e){return e.date;}).sort();
+    var fromDisp=isoToDisplay(dates[0]),toDisp=isoToDisplay(dates[dates.length-1]);
+    var key=btoa(unescape(encodeURIComponent(clientName))).replace(/[^a-zA-Z0-9]/g,'');
+    var card=document.createElement('div');
+    card.className='client-card';
+    var pendingBadge=pendingCount>0?'<span class="cc-pending-badge">'+pendingCount+' pendiente'+(pendingCount!==1?'s':'')+'</span>':'';
+    var metaRange=fromDisp+(fromDisp!==toDisp?' &rarr; '+toDisp:'');
+    var horasDisplay=pendingHours%1===0?pendingHours:pendingHours.toFixed(1);
+    var entriesHTML=entries.map(function(e){
+      var hoursDisplay=parseNum(e.hours)%1===0?parseNum(e.hours):parseNum(e.hours).toFixed(1);
+      var noteHTML=e.note||'<span style="color:#ccc">sin nota</span>';
+      var billedClass=e.billed?'invoiced':'pending';
+      var billedLabel=e.billed?'Facturada':'Pendiente';
+      var rowClass=e.billed?'entry-row invoiced':'entry-row';
+      return '<div class="'+rowClass+'">'+
+        '<span class="entry-date">'+isoToDisplay(e.date)+'</span>'+
+        '<span class="entry-hours">'+hoursDisplay+'hs</span>'+
+        '<span class="entry-note">'+noteHTML+'</span>'+
+        '<span class="entry-status '+billedClass+'" onclick="toggleBilled('+e.id+')">'+billedLabel+'</span>'+
+        '<div class="entry-actions">'+
+        '<button class="entry-edit" onclick="editHorasEntry('+e.id+')">Editar</button>'+
+        '<button class="entry-del" onclick="deleteHorasEntry('+e.id+')">&times;</button>'+
+        '</div></div>';
+    }).join('');
+    card.innerHTML=
+      '<div class="client-card-header" onclick="toggleClientEntries(this)">'+
+        '<div>'+
+          '<div class="cc-name">'+clientName+' '+pendingBadge+'</div>'+
+          '<div class="cc-meta">'+entries.length+' entrada'+(entries.length!==1?'s':'')+' &middot; '+metaRange+'</div>'+
+        '</div>'+
+        '<div class="cc-right">'+
+          '<div class="cc-hours">'+horasDisplay+'<span>hs pend.</span></div>'+
+          '<div class="cc-actions">'+
+            '<button class="cc-btn primary" onclick="event.stopPropagation();sendToFacturador(this)">Generar factura</button>'+
+            '<button class="cc-btn danger" onclick="event.stopPropagation();clearClientHoras(this)">Limpiar</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="client-entries" id="entries-'+key+'">'+entriesHTML+'</div>';
+    card.querySelector('.client-card-header').dataset.client=clientName;
+    card.querySelector('.client-card-header').dataset.key=key;
+    card.querySelector('.cc-btn.primary').dataset.client=clientName;
+    card.querySelector('.cc-btn.danger').dataset.client=clientName;
+    summary.appendChild(card);
+  });
+}
+
+function toggleClientEntries(el){
+  var key=el.dataset.key;
+  var entries=document.getElementById('entries-'+key);
+  if(entries)entries.classList.toggle('open');
+}
+function sendToFacturador(el){
+  var client=el.dataset.client;
+  var allLog=getHorasLog();
+  var pending=allLog.filter(function(e){return e.client===client&&!e.billed;});
+  if(!pending.length){alert('No hay horas pendientes para este cliente.');return;}
+  var totalHours=pending.reduce(function(a,e){return a+parseNum(e.hours);},0);
+  var dates=pending.map(function(e){return e.date;}).sort();
+  var fromParts=dates[0].split('-').map(Number);
+  var toParts=dates[dates.length-1].split('-').map(Number);
+  allLog.forEach(function(e){if(e.client===client&&!e.billed){e.billed=true;if(window.saveHoraToFirebase)saveHoraToFirebase(e);}});
+  setHorasLog(allLog);
+  facRows=[{fromM:fromParts[1]-1,fromY:fromParts[0],toM:toParts[1]-1,toY:toParts[0],client:client,hours:String(totalHours%1===0?totalHours:totalHours.toFixed(1)),rate:'30'}];
+  renderFacRows();updateInvoiceTable();renderHoras();showPage('facturador');
+}
+function clearClientHoras(el){
+  var client=el.dataset.client;
+  if(!confirm('Eliminar todas las horas de "'+client+'"?'))return;
+  var log=getHorasLog();
+  log.filter(function(e){return e.client===client;}).forEach(function(e){if(e._docId&&window.deleteHoraFromFirebase)deleteHoraFromFirebase(e._docId);});
+  setHorasLog(log.filter(function(e){return e.client!==client;}));renderHoras();
+}
+
+// Full init after all functions defined
+if(document.getElementById('h-date'))document.getElementById('h-date').value=todayISO();
 renderHoras();
 </script>
 </body>
