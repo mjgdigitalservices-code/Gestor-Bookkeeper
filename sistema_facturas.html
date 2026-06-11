@@ -626,7 +626,15 @@ async function generateAndSave(){
     const rec={id:Date.now(),num,date:iso,client,desc,hours,rate,total:parseNum(total.replace('$','')),status:'pending',pdf:pdfBase64};
     if(!invoices.find(i=>i.num===num)){invoices.push(rec);if(window.saveInvoiceToFirebase)await saveInvoiceToFirebase(rec);}
     else{const ex=invoices.find(i=>i.num===num);ex.pdf=pdfBase64;if(window.saveInvoiceToFirebase)await saveInvoiceToFirebase(ex);}
-    markDirty(); renderGestor();
+    // Mark horas as billed now that PDF was actually generated
+    if(window._pendingBillClient){
+      const allLog=getHorasLog();
+      allLog.forEach(function(e){if(e.client===window._pendingBillClient&&!e.billed){e.billed=true;if(window.saveHoraToFirebase)saveHoraToFirebase(e);}});
+      setHorasLog(allLog);
+      window._pendingBillClient=null;
+      renderHoras();
+    }
+    renderGestor();
     // Show last box
     document.getElementById('last-box').style.display='block';
     document.getElementById('last-info').innerHTML='📄 Invoice '+num+'<br>💵 '+total+'<br>🏢 '+client+
@@ -683,17 +691,13 @@ async function regeneratePDF(id){
 
 
 function setNextInvoiceNum(){
-  if(!invoices.length){
-    document.getElementById('f-num').value='00001';
-    document.getElementById('p-num').textContent='00001';
-    return;
-  }
-  // Find highest invoice number
-  const nums = invoices.map(i=>parseInt(i.num)||0);
-  const max = Math.max(...nums);
-  const lastInv = invoices.find(i=>parseInt(i.num)===max);
-  const lastNum = lastInv?lastInv.num:'00000';
-  const nextNum = String(max+1).padStart(lastNum.length,'0');
+  if(!invoices.length) return;
+  // Sort all invoice numbers as strings to find the last one
+  const validNums = invoices.map(i=>i.num||'').filter(n=>n.match(/^\d+$/));
+  if(!validNums.length) return;
+  validNums.sort((a,b)=>parseInt(b)-parseInt(a));
+  const lastNum = validNums[0];
+  const nextNum = String(parseInt(lastNum)+1).padStart(lastNum.length,'0');
   document.getElementById('f-num').value=nextNum;
   document.getElementById('p-num').textContent=nextNum;
 }
@@ -1188,10 +1192,10 @@ function sendToFacturador(el){
   var dates=pending.map(function(e){return e.date;}).sort();
   var fromParts=dates[0].split('-').map(Number);
   var toParts=dates[dates.length-1].split('-').map(Number);
-  allLog.forEach(function(e){if(e.client===client&&!e.billed){e.billed=true;if(window.saveHoraToFirebase)saveHoraToFirebase(e);}});
-  setHorasLog(allLog);
+  // Store client to mark as billed ONLY when PDF is actually generated
+  window._pendingBillClient = client;
   facRows=[{fromM:fromParts[1]-1,fromY:fromParts[0],toM:toParts[1]-1,toY:toParts[0],client:client,hours:String(totalHours%1===0?totalHours:totalHours.toFixed(1)),rate:'30'}];
-  renderFacRows();updateInvoiceTable();renderHoras();showPage('facturador');
+  renderFacRows();updateInvoiceTable();showPage('facturador');
 }
 function clearClientHoras(el){
   var client=el.dataset.client;
