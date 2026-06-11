@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sistema de Facturas — Maria Jose Gomez</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module">
@@ -30,7 +31,7 @@ async function loadFromFirebase() {
     invoices = invSnap.docs.map(d=>({...d.data(),_docId:d.id}));
     window._horasLog = horasSnap.docs.map(d=>({...d.data(),_docId:d.id}));
     cfgSnap.docs.forEach(d=>{if(d.id==='apiKey'&&d.data().value){apiKey=d.data().value;updateKeyStatus();}});
-    renderGestor();renderHoras();if(window.setNextInvoiceNum)window.setNextInvoiceNum();
+    renderGestor();renderHoras();
     const fb=document.getElementById('fb-status');
     if(fb){fb.textContent='Datos cargados';fb.style.display='block';fb.style.background='#e8f5ee';fb.style.color='#1a5f3f';setTimeout(()=>{fb.style.display='none';},2000);}
   } catch(e){console.error('Firebase error:',e);}
@@ -40,16 +41,7 @@ window.deleteInvoiceFromFirebase=async function(docId){if(!docId)return;try{awai
 window.saveHoraToFirebase=async function(entry){try{const data={...entry};delete data._docId;if(entry._docId){await setDoc(doc(db,'horas',entry._docId),data);}else{const ref=await addDoc(collection(db,'horas'),data);entry._docId=ref.id;}}catch(e){console.error(e);}};
 window.deleteHoraFromFirebase=async function(docId){if(!docId)return;try{await deleteDoc(doc(db,'horas',docId));}catch(e){console.error(e);}};
 window.saveApiKeyToFirebase=async function(key){try{await setDoc(doc(db,'config','apiKey'),{value:key});}catch(e){console.error(e);}};
-window.setNextInvoiceNum = function(){
-  if(!invoices.length) return;
-  const validNums = invoices.map(i=>i.num||'').filter(n=>/^\d+$/.test(n));
-  if(!validNums.length) return;
-  validNums.sort((a,b)=>parseInt(b)-parseInt(a));
-  const lastNum = validNums[0];
-  const nextNum = String(parseInt(lastNum)+1).padStart(lastNum.length,'0');
-  document.getElementById('f-num').value=nextNum;
-  document.getElementById('p-num').textContent=nextNum;
-};
+
 document.addEventListener('DOMContentLoaded',()=>loadFromFirebase());
 </script>
 <style>
@@ -286,16 +278,29 @@ tbody td:last-child { text-align: center; }
   <div class="topbar-left">
     <div class="topbar-brand">
       <div class="sub">Maria Jose Gomez</div>
-      <h1>Sistema de Facturas</h1>
+      <h1>Bookkeeper Manager</h1>
     </div>
-    <button class="tab active" id="tab-gestor" onclick="showPage('gestor')">📋 Gestor</button>
-    <button class="tab" id="tab-facturador" onclick="showPage('facturador')">✏️ Nueva Factura</button>
-    <button class="tab" id="tab-horas" onclick="showPage('horas')">⏱ Horas</button>
+    <button class="tab active" id="tab-gestor" onclick="showPage('gestor')"><i class="ti ti-home" aria-hidden="true" style="font-size:15px;margin-right:5px;"></i>Home</button>
+    <button class="tab" id="tab-facturador" onclick="showPage('facturador')"><i class="ti ti-file-invoice" aria-hidden="true" style="font-size:15px;margin-right:5px;"></i>New Invoice</button>
+    <button class="tab" id="tab-horas" onclick="showPage('horas')"><i class="ti ti-clock" aria-hidden="true" style="font-size:15px;margin-right:5px;"></i>Hours</button>
   </div>
   <div class="topbar-right">
-    <button class="key-btn" onclick="openKeyModal()">🔑 API Key</button>
-    <button class="tb-btn outline" onclick="openUpload()">📂 Subir PDFs</button>
-    <button class="tb-btn" id="migrate-btn" onclick="document.getElementById('migrate-file-input').click()" style="background:#e8a020;color:white;border:none;">⬆️ Migrar JSON</button>
+    <div style="position:relative;">
+      <button class="tb-btn outline" onclick="toggleToolsMenu()" id="tools-btn">
+        <i class="ti ti-tools" aria-hidden="true" style="font-size:14px;margin-right:5px;"></i>Tools <i class="ti ti-chevron-down" aria-hidden="true" style="font-size:12px;"></i>
+      </button>
+      <div id="tools-menu" style="display:none;position:absolute;right:0;top:calc(100% + 6px);background:white;border:0.5px solid #dde8e2;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:170px;z-index:100;overflow:hidden;">
+        <button onclick="openKeyModal();closeToolsMenu()" style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 16px;background:none;border:none;border-bottom:0.5px solid #eef2ef;font-size:13px;color:#222;cursor:pointer;font-family:Arial,sans-serif;">
+          <i class="ti ti-key" aria-hidden="true" style="font-size:15px;color:#1a5f3f;"></i> API Key
+        </button>
+        <button onclick="openUpload();closeToolsMenu()" style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 16px;background:none;border:none;border-bottom:0.5px solid #eef2ef;font-size:13px;color:#222;cursor:pointer;font-family:Arial,sans-serif;">
+          <i class="ti ti-upload" aria-hidden="true" style="font-size:15px;color:#1a5f3f;"></i> Upload PDFs
+        </button>
+        <button id="migrate-btn" onclick="document.getElementById('migrate-file-input').click();closeToolsMenu()" style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 16px;background:none;border:none;font-size:13px;color:#222;cursor:pointer;font-family:Arial,sans-serif;">
+          <i class="ti ti-database-import" aria-hidden="true" style="font-size:15px;color:#e8a020;"></i> Migrate JSON
+        </button>
+      </div>
+    </div>
     <input type="file" id="migrate-file-input" accept=".json" style="display:none">
     <span id="fb-status" style="font-size:12px;padding:5px 10px;display:none;border-radius:6px;"></span>
   </div>
@@ -794,6 +799,20 @@ function renderGestor(){
     </div></td>`;
     tbody.appendChild(tr);
   });
+
+  setNextInvoiceNum();}
+
+function setNextInvoiceNum(){
+  if(!invoices.length) return;
+  const validNums = invoices.map(i=>i.num||'').filter(n=>/^\d+$/.test(n));
+  if(!validNums.length) return;
+  validNums.sort((a,b)=>parseInt(b)-parseInt(a));
+  const lastNum = validNums[0];
+  const nextNum = String(parseInt(lastNum)+1).padStart(lastNum.length,'0');
+  const el = document.getElementById('f-num');
+  const el2 = document.getElementById('p-num');
+  if(el) el.value = nextNum;
+  if(el2) el2.textContent = nextNum;
 }
 
 // ══════════════════════════════════════════════
@@ -1203,6 +1222,20 @@ function clearClientHoras(el){
   log.filter(function(e){return e.client===client;}).forEach(function(e){if(e._docId&&window.deleteHoraFromFirebase)deleteHoraFromFirebase(e._docId);});
   setHorasLog(log.filter(function(e){return e.client!==client;}));renderHoras();
 }
+
+function toggleToolsMenu(){
+  const m=document.getElementById('tools-menu');
+  m.style.display=m.style.display==='none'?'block':'none';
+}
+function closeToolsMenu(){
+  document.getElementById('tools-menu').style.display='none';
+}
+document.addEventListener('click',function(e){
+  if(!document.getElementById('tools-btn').contains(e.target)&&
+     !document.getElementById('tools-menu').contains(e.target)){
+    document.getElementById('tools-menu').style.display='none';
+  }
+});
 
 // Full init after all functions defined
 if(document.getElementById('h-date'))document.getElementById('h-date').value=todayISO();
