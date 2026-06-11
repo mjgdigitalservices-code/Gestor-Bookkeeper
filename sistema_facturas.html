@@ -30,7 +30,7 @@ async function loadFromFirebase() {
     invoices = invSnap.docs.map(d=>({...d.data(),_docId:d.id}));
     window._horasLog = horasSnap.docs.map(d=>({...d.data(),_docId:d.id}));
     cfgSnap.docs.forEach(d=>{if(d.id==='apiKey'&&d.data().value){apiKey=d.data().value;updateKeyStatus();}});
-    renderGestor();renderHoras();setNextInvoiceNum();
+    renderGestor();renderHoras();if(window.setNextInvoiceNum)window.setNextInvoiceNum();
     const fb=document.getElementById('fb-status');
     if(fb){fb.textContent='Datos cargados';fb.style.display='block';fb.style.background='#e8f5ee';fb.style.color='#1a5f3f';setTimeout(()=>{fb.style.display='none';},2000);}
   } catch(e){console.error('Firebase error:',e);}
@@ -40,6 +40,16 @@ window.deleteInvoiceFromFirebase=async function(docId){if(!docId)return;try{awai
 window.saveHoraToFirebase=async function(entry){try{const data={...entry};delete data._docId;if(entry._docId){await setDoc(doc(db,'horas',entry._docId),data);}else{const ref=await addDoc(collection(db,'horas'),data);entry._docId=ref.id;}}catch(e){console.error(e);}};
 window.deleteHoraFromFirebase=async function(docId){if(!docId)return;try{await deleteDoc(doc(db,'horas',docId));}catch(e){console.error(e);}};
 window.saveApiKeyToFirebase=async function(key){try{await setDoc(doc(db,'config','apiKey'),{value:key});}catch(e){console.error(e);}};
+window.setNextInvoiceNum = function(){
+  if(!invoices.length) return;
+  const validNums = invoices.map(i=>i.num||'').filter(n=>/^\d+$/.test(n));
+  if(!validNums.length) return;
+  validNums.sort((a,b)=>parseInt(b)-parseInt(a));
+  const lastNum = validNums[0];
+  const nextNum = String(parseInt(lastNum)+1).padStart(lastNum.length,'0');
+  document.getElementById('f-num').value=nextNum;
+  document.getElementById('p-num').textContent=nextNum;
+};
 document.addEventListener('DOMContentLoaded',()=>loadFromFirebase());
 </script>
 <style>
@@ -690,17 +700,7 @@ async function regeneratePDF(id){
 }
 
 
-function setNextInvoiceNum(){
-  if(!invoices.length) return;
-  // Sort all invoice numbers as strings to find the last one
-  const validNums = invoices.map(i=>i.num||'').filter(n=>n.match(/^\d+$/));
-  if(!validNums.length) return;
-  validNums.sort((a,b)=>parseInt(b)-parseInt(a));
-  const lastNum = validNums[0];
-  const nextNum = String(parseInt(lastNum)+1).padStart(lastNum.length,'0');
-  document.getElementById('f-num').value=nextNum;
-  document.getElementById('p-num').textContent=nextNum;
-}
+
 
 function viewPDF(id){
   const inv=invoices.find(i=>i.id===id);
