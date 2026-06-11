@@ -351,9 +351,9 @@ tbody td:last-child { text-align: center; }
       </div>
       <div class="fac-section">
         <h3>Factura</h3>
-        <div class="f-field"><label>N° Factura</label><input id="f-num" value="00156"></div>
-        <div class="f-field"><label>Fecha</label><input id="f-date" type="date" value="2026-06-01"></div>
-        <div class="f-field"><label>Cliente (To)</label><input id="f-to" value="Mitchell J Howard CPA PA"></div>
+        <div class="f-field"><label>N° Factura</label><input id="f-num" value=""></div>
+        <div class="f-field"><label>Fecha</label><input id="f-date" type="date"></div>
+        <div class="f-field"><label>Cliente (To)</label><input id="f-to" value="Howard &amp; Partners"></div>
       </div>
       <div class="fac-section">
         <h3>Servicios</h3>
@@ -382,12 +382,12 @@ tbody td:last-child { text-align: center; }
           </div>
           <div class="inv-meta">
             <div class="inv-label">INVOICE</div>
-            <table><tr><td>Invoice:</td><td id="p-num">00156</td></tr><tr><td>Date:</td><td id="p-date">06/01/2026</td></tr></table>
+            <table><tr><td>Invoice:</td><td id="p-num"></td></tr><tr><td>Date:</td><td id="p-date">06/01/2026</td></tr></table>
           </div>
         </div>
         <div class="inv-to">
           <div class="to-label">To:</div>
-          <div class="to-name" id="p-to">Mitchell J Howard CPA PA</div>
+          <div class="to-name" id="p-to">Howard &amp; Partners</div>
         </div>
         <table class="inv-table">
           <thead><tr><th>Description</th><th>Hours</th><th>Rate</th><th>Amount</th></tr></thead>
@@ -679,6 +679,23 @@ async function regeneratePDF(id){
     const{pdf,filename}=await buildPDFBase64();
     pdf.save((filename||'invoice')+'.pdf');
   }catch(e){alert('Error generando PDF: '+e.message);}
+}
+
+
+function setNextInvoiceNum(){
+  if(!invoices.length){
+    document.getElementById('f-num').value='00001';
+    document.getElementById('p-num').textContent='00001';
+    return;
+  }
+  // Find highest invoice number
+  const nums = invoices.map(i=>parseInt(i.num)||0);
+  const max = Math.max(...nums);
+  const lastInv = invoices.find(i=>parseInt(i.num)===max);
+  const lastNum = lastInv?lastInv.num:'00000';
+  const nextNum = String(max+1).padStart(lastNum.length,'0');
+  document.getElementById('f-num').value=nextNum;
+  document.getElementById('p-num').textContent=nextNum;
 }
 
 function viewPDF(id){
@@ -994,6 +1011,14 @@ document.getElementById('upload-bg').addEventListener('click',function(e){if(e.t
 // Init
 renderFacRows();
 renderGestor();
+// Set today's date on facturador
+(function(){
+  const today = todayISO();
+  document.getElementById('f-date').value = today;
+  const parts = today.split('-');
+  document.getElementById('p-date').textContent = parts[1]+'/'+parts[2]+'/'+parts[0];
+})();
+setNextInvoiceNum();
 
 // ══ HORAS FUNCTIONS ══
 if(!window._horasLog)window._horasLog=[];
