@@ -656,6 +656,31 @@ function isoToDisplay(d){if(!d)return'';const iso=dateToISO(d);if(!iso)return d;
 function getMonthKey(d){const iso=dateToISO(d);return iso?iso.slice(0,7):'';}
 function monthLabel(key){if(!key)return'';const[y,m]=key.split('-');return['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][parseInt(m)-1]+' '+y;}
 
+
+async function regeneratePDF(id){
+  const inv=invoices.find(i=>i.id===id);
+  if(!inv)return;
+  // Temporarily populate facturador with invoice data to generate PDF
+  const dp=inv.date?inv.date.split('-'):[];
+  const fromM=dp.length===3?parseInt(dp[1])-1:0;
+  const fromY=dp.length===3?parseInt(dp[0]):2026;
+  // Set facturador fields
+  document.getElementById('f-num').value=inv.num||'';
+  document.getElementById('p-num').textContent=inv.num||'';
+  const[y,m,d]=inv.date?inv.date.split('-'):['2026','01','01'];
+  document.getElementById('f-date').value=inv.date||'';
+  document.getElementById('p-date').textContent=(m||'01')+'/'+(d||'01')+'/'+(y||'2026');
+  document.getElementById('f-to').value=inv.client||'';
+  document.getElementById('p-to').textContent=inv.client||'';
+  facRows=[{fromM,fromY,toM:fromM,toY:fromY,client:inv.client||'',hours:inv.hours||'',rate:inv.rate||'30'}];
+  // Parse desc for better date range if available
+  renderFacRows();updateInvoiceTable();
+  try{
+    const{pdf,filename}=await buildPDFBase64();
+    pdf.save((filename||'invoice')+'.pdf');
+  }catch(e){alert('Error generando PDF: '+e.message);}
+}
+
 function viewPDF(id){
   const inv=invoices.find(i=>i.id===id);
   if(!inv||!inv.pdf)return;
@@ -742,7 +767,7 @@ function renderGestor(){
     tr.innerHTML=`<td><strong>${inv.num||'—'}</strong></td><td>${isoToDisplay(inv.date)||'—'}</td><td>${inv.client||'—'}</td><td>${inv.hours||'—'}</td><td>${inv.rate?'$'+parseFloat(inv.rate).toFixed(2):'—'}</td><td><strong>${fmtMoney(inv.total)}</strong></td>
     <td><span class="badge ${inv.status}" onclick="toggleStatus(${inv.id})">${inv.status==='paid'?'✓ Pagada':'⏳ Pendiente'}</span></td>
     <td><div class="actions">
-      ${inv.pdf?`<button class="act-btn view" onclick="viewPDF(${inv.id})">👁</button>`:''}
+      ${inv.pdf?`<button class="act-btn view" onclick="viewPDF(${inv.id})">👁</button>`:`<button class="act-btn view" onclick="regeneratePDF(${inv.id})" title="Regenerar PDF">🖨️</button>`}
       <button class="act-btn" onclick="editInvoice(${inv.id})">✏️</button>
       <button class="act-btn del" onclick="deleteInvoice(${inv.id})">🗑</button>
     </div></td>`;
