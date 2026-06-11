@@ -35,7 +35,7 @@ async function loadFromFirebase() {
     if(fb){fb.textContent='Datos cargados';fb.style.display='block';fb.style.background='#e8f5ee';fb.style.color='#1a5f3f';setTimeout(()=>{fb.style.display='none';},2000);}
   } catch(e){console.error('Firebase error:',e);}
 }
-window.saveInvoiceToFirebase=async function(inv){try{const data={...inv};delete data._docId;if(inv._docId){await setDoc(doc(db,'invoices',inv._docId),data);}else{const ref=await addDoc(collection(db,'invoices'),data);inv._docId=ref.id;}}catch(e){console.error(e);}};
+window.saveInvoiceToFirebase=async function(inv){try{const data={...inv};delete data._docId;delete data.pdf;if(inv._docId){await setDoc(doc(db,'invoices',inv._docId),data);}else{const ref=await addDoc(collection(db,'invoices'),data);inv._docId=ref.id;}}catch(e){console.error(e);}};
 window.deleteInvoiceFromFirebase=async function(docId){if(!docId)return;try{await deleteDoc(doc(db,'invoices',docId));}catch(e){console.error(e);}};
 window.saveHoraToFirebase=async function(entry){try{const data={...entry};delete data._docId;if(entry._docId){await setDoc(doc(db,'horas',entry._docId),data);}else{const ref=await addDoc(collection(db,'horas'),data);entry._docId=ref.id;}}catch(e){console.error(e);}};
 window.deleteHoraFromFirebase=async function(docId){if(!docId)return;try{await deleteDoc(doc(db,'horas',docId));}catch(e){console.error(e);}};
