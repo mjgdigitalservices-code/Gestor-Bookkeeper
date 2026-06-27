@@ -433,20 +433,34 @@ tbody td:last-child { text-align: center; }
       </div>
     </div>
     <div class="horas-summary-col">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;">
+        <div style="background:white;border:0.5px solid #dde8e2;border-radius:12px;padding:14px 18px;">
+          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Pending hours</div>
+          <div style="font-size:24px;font-weight:700;color:#1a5f3f;" id="h-total-hours">0</div>
+        </div>
+        <div style="background:white;border:0.5px solid #dde8e2;border-radius:12px;padding:14px 18px;">
+          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Rate ($/hr)</div>
+          <input type="text" inputmode="decimal" id="h-rate" value="30" oninput="updateHorasTotals()" style="font-size:20px;font-weight:700;color:#1a5f3f;border:none;outline:none;width:100%;background:transparent;font-family:Arial,sans-serif;">
+        </div>
+        <div style="background:#e8f5ee;border:0.5px solid #a8d5b8;border-radius:12px;padding:14px 18px;">
+          <div style="font-size:11px;color:#1a5f3f;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Estimated total</div>
+          <div style="font-size:24px;font-weight:700;color:#1a5f3f;" id="h-total-amount">$0.00</div>
+        </div>
+      </div>
       <div class="horas-filters">
-        <label>Mostrar:</label>
+        <label>Show:</label>
         <select id="h-filter" onchange="renderHoras()">
-          <option value="all">Todos</option>
-          <option value="pending">Pendientes de facturar</option>
-          <option value="invoiced">Facturadas</option>
+          <option value="all">All</option>
+          <option value="pending" selected>Pending billing</option>
+          <option value="invoiced">Billed</option>
         </select>
-        <label style="margin-left:8px">Ordenar:</label>
+        <label style="margin-left:8px">Sort:</label>
         <select id="h-sort" onchange="renderHoras()">
-          <option value="date-desc">Fecha ↓</option>
-          <option value="date-asc">Fecha ↑</option>
-          <option value="hours-desc">Horas ↓</option>
-          <option value="hours-asc">Horas ↑</option>
-          <option value="client-asc">Cliente A-Z</option>
+          <option value="date-desc">Date ↓</option>
+          <option value="date-asc">Date ↑</option>
+          <option value="hours-desc">Hours ↓</option>
+          <option value="hours-asc">Hours ↑</option>
+          <option value="client-asc">Client A-Z</option>
         </select>
       </div>
       <div id="horas-summary">
@@ -1073,6 +1087,18 @@ document.getElementById('migrate-file-input').addEventListener('change',async fu
   r.readAsText(file);this.value='';
 });
 
+
+function updateHorasTotals(){
+  const log = getHorasLog();
+  const pendingHours = log.filter(e=>!e.billed).reduce((a,e)=>a+parseNum(e.hours),0);
+  const rate = parseNum(document.getElementById('h-rate')?document.getElementById('h-rate').value:'30');
+  const total = pendingHours * rate;
+  const hoursEl = document.getElementById('h-total-hours');
+  const amountEl = document.getElementById('h-total-amount');
+  if(hoursEl) hoursEl.textContent = pendingHours%1===0?pendingHours:pendingHours.toFixed(1);
+  if(amountEl) amountEl.textContent = '$'+total.toFixed(2);
+}
+
 function addHorasEntry(){
   const client=document.getElementById('h-client').value.trim();
   const date=document.getElementById('h-date').value;
@@ -1116,6 +1142,7 @@ function editHorasEntry(id){
 
 
 function renderHoras(){
+  updateHorasTotals();
   var log=getHorasLog();
   var summary=document.getElementById('horas-summary');
   if(!summary)return;
