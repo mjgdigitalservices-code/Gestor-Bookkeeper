@@ -78,7 +78,7 @@ body { font-family: Arial, sans-serif; background: #f4f6f4; color: #222; min-hei
 .notice-btn.grey { background: #555; }
 .notice-info { background: #e8f5ee; border-color: #a8d5b8; color: #1a5f3f; }
 
-.summary { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; padding: 18px 28px 0; }
+.summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; padding: 18px 28px 0; }
 .card { background: white; border-radius: 12px; padding: 14px 18px; border: 0.5px solid #dde8e2; }
 .card .c-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
 .card .c-value { font-size: 21px; font-weight: 700; color: #1a5f3f; }
@@ -317,6 +317,8 @@ tbody td:last-child { text-align: center; }
     <div class="card warn"><div class="c-label">Pendiente de cobro</div><div class="c-value" id="s-pendiente">$0.00</div><div class="c-sub" id="s-pendiente-n">0 facturas</div></div>
     <div class="card neutral"><div class="c-label">Total facturado</div><div class="c-value" id="s-total">$0.00</div><div class="c-sub" id="s-total-n">0 facturas</div></div>
     <div class="card neutral"><div class="c-label">Horas totales</div><div class="c-value" id="s-horas">0</div><div class="c-sub">horas trabajadas</div></div>
+    <div class="card warn"><div class="c-label">Hours pending billing</div><div class="c-value" id="s-hours-pending">$0.00</div><div class="c-sub" id="s-hours-pending-n">0 hrs · $30/hr</div></div>
+    <div class="card" style="border-color:#1a5f3f;"><div class="c-label">Total to collect</div><div class="c-value" id="s-total-collect">$0.00</div><div class="c-sub">invoices + hours</div></div>
   </div>
 
   <div class="filters">
@@ -764,6 +766,19 @@ function updateSummary(list){
   document.getElementById('s-total-n').textContent=list.length+' factura'+(list.length!==1?'s':'');
   const h=list.reduce((a,i)=>a+parseNum(i.hours),0);
   document.getElementById('s-horas').textContent=h%1===0?h:h.toFixed(1);
+  // Hours pending billing
+  const log=getHorasLog();
+  const pendingHrs=log.filter(e=>!e.billed).reduce((a,e)=>a+parseNum(e.hours),0);
+  const rate=parseNum(document.getElementById('h-rate')?document.getElementById('h-rate').value:'30');
+  const hoursPendingAmt=pendingHrs*rate;
+  const hpEl=document.getElementById('s-hours-pending');
+  const hpnEl=document.getElementById('s-hours-pending-n');
+  if(hpEl)hpEl.textContent=fmtMoney(hoursPendingAmt);
+  if(hpnEl)hpnEl.textContent=(pendingHrs%1===0?pendingHrs:pendingHrs.toFixed(1))+' hrs · $'+rate+'/hr';
+  // Total to collect
+  const invoicesPending=pend.reduce((a,i)=>a+parseNum(i.total),0);
+  const tcEl=document.getElementById('s-total-collect');
+  if(tcEl)tcEl.textContent=fmtMoney(invoicesPending+hoursPendingAmt);
 }
 function updateClientFilter(){
   const sel=document.getElementById('fil-client'),cur=sel.value;
